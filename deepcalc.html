@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DeepCalc</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#e9ebf3;--panel:#ffffff;--screen:#f3f4fa;--key:#eef0f7;--key-h:#e2e5f1;--fn:#e6e8f4;
+  --tx:#191c2b;--mut:#7a8099;--op:#5b45e6;--acc:#f08a0b;--acc-h:#d97a05;--acc-tx:#2a1700;--danger:#d6385a;--line:#dfe2ee;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){--bg:#0f111a;--panel:#171a26;--screen:#0f1119;--key:#232738;--key-h:#2d3248;--fn:#1e2232;
+  --tx:#eceef8;--mut:#8a90aa;--op:#a999ff;--acc:#ffb347;--acc-h:#ffc36d;--acc-tx:#2a1700;--danger:#ff7a95;--line:#262a3d}
+}
+:root[data-theme="dark"]{--bg:#0f111a;--panel:#171a26;--screen:#0f1119;--key:#232738;--key-h:#2d3248;--fn:#1e2232;
+  --tx:#eceef8;--mut:#8a90aa;--op:#a999ff;--acc:#ffb347;--acc-h:#ffc36d;--acc-tx:#2a1700;--danger:#ff7a95;--line:#262a3d}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:var(--bg);color:var(--tx);font-family:'Sora',system-ui,-apple-system,'Segoe UI',sans-serif;
+  display:flex;justify-content:center;align-items:flex-start;padding:24px 14px}
+.app{width:100%;max-width:880px;display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:16px;align-items:start}
+.calc,.hist{background:var(--panel);border-radius:26px;padding:16px;border:1px solid var(--line)}
+.screen{background:var(--screen);border-radius:18px;padding:14px 18px 12px;min-height:128px;display:flex;flex-direction:column;justify-content:flex-end;text-align:right;overflow:hidden}
+.out{min-height:1.4em;color:var(--mut);font-size:1rem;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.out.err{color:var(--danger)}
+.expr{font-size:2.5rem;font-weight:300;line-height:1.15;min-height:1.15em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;word-break:break-all;letter-spacing:-.01em}
+.expr.m{font-size:1.9rem}.expr.s{font-size:1.4rem}
+.bar{display:flex;gap:8px;margin:12px 0}
+.seg{display:inline-flex;background:var(--fn);border-radius:12px;padding:3px}
+.seg button,.tog{font:500 .8rem 'Sora',sans-serif;color:var(--mut);background:transparent;border:0;border-radius:9px;padding:7px 14px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--panel);color:var(--tx);box-shadow:0 1px 3px rgba(0,0,0,.18)}
+.tog{background:var(--fn);border-radius:12px;padding:10px 16px}
+.tog[aria-pressed="true"]{background:var(--op);color:var(--panel)}
+.keys{display:flex;gap:12px}
+.sci{flex:3;display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pad{flex:4;display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.k{height:54px;border:0;border-radius:15px;background:var(--key);color:var(--tx);font:500 1.1rem 'Sora',sans-serif;cursor:pointer;
+  transition:background .12s,transform .08s;font-variant-numeric:tabular-nums;padding:0}
+.k:hover{background:var(--key-h)}.k:active{transform:scale(.95)}
+.k.fn{background:var(--fn);font-size:.95rem;color:var(--tx)}
+.k.fn:hover{background:var(--key-h)}
+.k.op{color:var(--op);font-size:1.35rem}
+.k.ac{color:var(--danger)}
+.k.eq{grid-column:span 3;background:var(--acc);color:var(--acc-tx);font-size:1.6rem;font-weight:600}
+.k.eq:hover{background:var(--acc-h)}
+button:focus-visible{outline:2px solid var(--op);outline-offset:2px}
+.hist h2{font-size:.95rem;font-weight:600;margin:4px 4px 10px;display:flex;justify-content:space-between;align-items:center}
+.hist h2 button{font:500 .78rem 'Sora',sans-serif;background:none;border:0;color:var(--mut);cursor:pointer;padding:4px 6px;border-radius:8px}
+.hist h2 button:hover{color:var(--danger)}
+.list{display:flex;flex-direction:column;gap:6px;max-height:520px;overflow-y:auto}
+.item{text-align:right;background:var(--fn);border:0;border-radius:12px;padding:9px 12px;cursor:pointer;color:var(--tx);font-family:inherit}
+.item:hover{background:var(--key-h)}
+.item small{display:block;color:var(--mut);font-size:.75rem;overflow-wrap:anywhere}
+.item b{font-weight:500;font-size:1.05rem;overflow-wrap:anywhere}
+.empty{color:var(--mut);font-size:.85rem;padding:6px 4px;line-height:1.5}
+.ai{margin-top:12px;background:var(--fn);border-radius:18px;padding:12px}
+.ai[hidden],.tog[hidden]{display:none}
+.ai textarea{width:100%;min-height:78px;resize:vertical;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--tx);font:400 .92rem/1.45 'Sora',system-ui,sans-serif;padding:10px 12px}
+.ai textarea:focus-visible{outline:2px solid var(--op);outline-offset:1px}
+.ai .row{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
+.ai .go{background:var(--acc);color:var(--acc-tx);border:0;border-radius:12px;padding:10px 18px;font:600 .9rem 'Sora',sans-serif;cursor:pointer}
+.ai .go:disabled{opacity:.55;cursor:wait}
+.ai .use{background:var(--key);color:var(--tx);border:0;border-radius:12px;padding:10px 14px;font:500 .85rem 'Sora',sans-serif;cursor:pointer}
+.ai .stat{color:var(--mut);font-size:.82rem}
+.ai .res{margin-top:10px;font-size:.92rem;line-height:1.55;overflow-wrap:anywhere}
+.ai .res .big{font-size:1.5rem;font-weight:500;font-variant-numeric:tabular-nums}
+.ai .res .lbl{color:var(--mut);font-size:.78rem;display:block;margin-top:6px}
+.ai .res.err{color:var(--danger)}
+.ai .note{color:var(--mut);font-size:.75rem;margin-top:8px}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.tabs{display:flex;flex:1;max-width:300px;margin-bottom:0}
+.tabs button{flex:1;padding:9px 14px}
+.lang-btn{min-width:50px;padding:9px 12px;border:1px solid var(--line);border-radius:12px;background:var(--fn);color:var(--tx);font:600 .8rem 'Sora',sans-serif;cursor:pointer;transition:background .12s,transform .08s}
+.lang-btn:hover{background:var(--key-h)}.lang-btn:active{transform:scale(.96)}
+:root{--g1:#1f9d6b;--g2:#6a9f10;--g3:#c79200;--g4:#e8730c;--g5:#d6385a}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--g1:#4be3a8;--g2:#a8dc4a;--g3:#ffd24a;--g4:#ffa04d;--g5:#ff7a95}}
+:root[data-theme="dark"]{--g1:#4be3a8;--g2:#a8dc4a;--g3:#ffd24a;--g4:#ffa04d;--g5:#ff7a95}
+.avgscreen{min-height:200px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;margin:8px 0;max-height:112px;overflow-y:auto}
+.chip{min-width:34px;height:34px;padding:0 6px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-weight:600;font-size:1rem;color:var(--c);background:color-mix(in srgb,var(--c) 16%,transparent)}
+.avgres{min-height:3.4rem;font-size:2.8rem;font-weight:300;line-height:1.1;font-variant-numeric:tabular-nums}
+.avgres small{display:block;font-size:.8rem;color:var(--mut);font-weight:400;margin-bottom:2px}
+.gpad{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:12px}
+.gpad .k{height:84px;font-size:2rem;font-weight:500}
+.gpad .k.r2{height:60px;font-size:1.1rem}
+.gpad .k.eq{grid-column:span 3;font-size:1.6rem}
+.avghint{color:var(--mut);font-size:.8rem;margin-top:12px;text-align:center}
+@media (max-width:520px){.gpad{gap:6px}.gpad .k{height:66px;font-size:1.7rem}.gpad .k.r2{height:52px}}
+@media (max-width:760px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .list{max-height:240px}
+}
+@media (max-width:520px){
+  body{padding:12px 8px}
+  .calc{padding:12px;border-radius:22px}
+  .keys{flex-direction:column;gap:8px}
+  .sci{grid-template-columns:repeat(5,1fr);gap:6px}
+  .pad{gap:6px}
+  .k{height:50px}
+  .sci .k{font-size:.82rem;height:44px;border-radius:12px}
+  .expr{font-size:2rem}.expr.m{font-size:1.6rem}.expr.s{font-size:1.2rem}
+}
+@media (prefers-reduced-motion:reduce){.k{transition:none}}
+</style>
+</head>
+<body>
+<main class="app">
+  <section class="calc" aria-label="Kalkulačka">
+    <div class="topbar">
+      <div class="seg tabs" role="group" aria-label="Režim">
+        <button id="tabCalc" aria-pressed="true">Kalkulačka</button>
+        <button id="tabAvg" aria-pressed="false">Priemer</button>
+      </div>
+      <button class="lang-btn" id="langBtn" type="button" aria-label="Switch language to English" title="Switch language to English">EN</button>
+    </div>
+    <div id="calcView">
+    <div class="screen" aria-live="polite">
+      <div class="out" id="out"></div>
+      <div class="expr" id="expr">0</div>
+    </div>
+    <div class="bar">
+      <div class="seg" role="group" aria-label="Jednotka uhla">
+        <button id="deg" aria-pressed="true">Stupne</button>
+        <button id="rad" aria-pressed="false">Radiány</button>
+      </div>
+      <button class="tog" id="inv" aria-pressed="false" title="Inverzné funkcie">Inverzné</button>
+      <button class="tog" id="aiBtn" aria-pressed="false" hidden title="Riešenie slovných úloh pomocou lokálnej AI">Slovná úloha</button>
+    </div>
+    <div class="keys">
+      <div class="sci" id="sci"></div>
+      <div class="pad" id="pad"></div>
+    </div>
+    <div class="ai" id="ai" hidden>
+      <textarea id="aiText" placeholder="Napíš slovnú úlohu, napr. Auto ide rýchlosťou 80 km/h a ide 2,5 hodiny. Akú dráhu prejde?" aria-label="Slovná úloha"></textarea>
+      <div class="row">
+        <button class="go" id="aiGo">Určiť vzorec</button>
+        <span class="stat" id="aiStat"></span>
+      </div>
+      <div class="res" id="aiRes" aria-live="polite"></div>
+      <div class="note">AI určí vzorec a výraz, výpočet robí kalkulačka. Postup si vždy skontroluj.</div>
+    </div>
+    </div>
+    <div id="avgView" hidden>
+      <div class="screen avgscreen" aria-live="polite">
+        <div class="out" id="avgInfo"></div>
+        <div class="chips" id="avgChips"></div>
+        <div class="avgres" id="avgRes"></div>
+      </div>
+      <div class="gpad" id="gpad"></div>
+      <div class="avghint" id="avgHint">Klikaj známky z žiackej knižky a na konci stlač =</div>
+    </div>
+  </section>
+  <aside class="hist" aria-label="História výpočtov">
+    <h2>História <button id="clr">Vymazať</button></h2>
+    <div class="list" id="list"></div>
+  </aside>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const I18N={
+  sk:{
+    calculator:'Kalkulačka',average:'Priemer',mode:'Režim',angleUnit:'Jednotka uhla',
+    degrees:'Stupne',radians:'Radiány',inverse:'Inverzné',inverseTitle:'Inverzné funkcie',
+    wordProblem:'Slovná úloha',wordProblemTitle:'Riešenie slovných úloh pomocou lokálnej AI',
+    wordPlaceholder:'Napíš slovnú úlohu, napr. Auto ide rýchlosťou 80 km/h a ide 2,5 hodiny. Akú dráhu prejde?',
+    chooseFormula:'Určiť vzorec',aiNote:'AI určí vzorec a výraz, výpočet robí kalkulačka. Postup si vždy skontroluj.',
+    history:'História',clear:'Vymazať',historyEmpty:'Tu sa objavia tvoje výpočty. Kliknutím na záznam ho použiješ znova.',
+    calculate:'Vypočítať',deleteLastGrade:'Zmazať poslednú známku',calculateAverage:'Vypočítať priemer',
+    gradesEmpty:'Zatiaľ žiadne známky',gradeOne:'známka',gradeFew:'známky',gradeMany:'známok',sum:'súčet',
+    averageLabel:'Priemer',gradeHint:'Klikaj známky z žiackej knižky a na konci stlač =',
+    modelMissing:'Model sa nenašiel. Súbor .gguf patrí do priečinka: ',
+    connectionError:'Chyba spojenia s aplikáciou: ',
+    modelThinking:'Model premýšľa… môže to trvať aj pol minúty (pri prvom použití sa najprv načíta)',
+    aiError:'Chyba AI: ',unknown:'neznáma',reasoning:'Úvaha modelu',formula:'Vzorec',
+    substitution:'Dosadenie',expression:'Výraz',result:'Výsledok',useExpression:'Použiť výraz v kalkulačke',
+    expressionFailed:'Výraz sa nepodarilo vypočítať: ',rephrase:'Skús úlohu preformulovať.',
+    invalidCharacter:'Neplatný znak',unknownName:'Neznáme: ',incompleteExpression:'Neúplný výraz',
+    invalidExpression:'Neplatný výraz',factorialRange:'Faktoriál: len celé čísla 0 až 170',
+    tanUndefined:'tan: nedefinovaný',asinDomain:'asin: mimo oboru [−1; 1]',acosDomain:'acos: mimo oboru [−1; 1]',
+    acoshDomain:'acosh: x musí byť ≥ 1',atanhDomain:'atanh: x musí byť v (−1; 1)',
+    lnPositive:'ln: x musí byť > 0',logPositive:'log: x musí byť > 0',
+    sqrtNegative:'√ zo záporného čísla',divisionByZero:'Delenie nulou',
+    resultUndefined:'Výsledok nie je definovaný',switchToEnglish:'Prepnúť do angličtiny',
+    switchToSlovak:'Prepnúť do slovenčiny'
+  },
+  en:{
+    calculator:'Calculator',average:'Average',mode:'Mode',angleUnit:'Angle unit',
+    degrees:'Degrees',radians:'Radians',inverse:'Inverse',inverseTitle:'Inverse functions',
+    wordProblem:'Word problem',wordProblemTitle:'Solve word problems using local AI',
+    wordPlaceholder:'Enter a word problem, e.g. A car travels at 80 km/h for 2.5 hours. How far does it travel?',
+    chooseFormula:'Find formula',aiNote:'AI identifies the formula and expression; the calculator performs the calculation. Always check the working.',
+    history:'History',clear:'Clear',historyEmpty:'Your calculations will appear here. Click an entry to use it again.',
+    calculate:'Calculate',deleteLastGrade:'Delete the last grade',calculateAverage:'Calculate average',
+    gradesEmpty:'No grades yet',gradeOne:'grade',gradeFew:'grades',gradeMany:'grades',sum:'sum',
+    averageLabel:'Average',gradeHint:'Select grades from your gradebook, then press =',
+    modelMissing:'Model not found. Place a .gguf file in one of these folders: ',
+    connectionError:'Connection error: ',
+    modelThinking:'The model is thinking… this may take up to half a minute (the first use also loads the model).',
+    aiError:'AI error: ',unknown:'unknown',reasoning:'Reasoning',formula:'Formula',
+    substitution:'Substitution',expression:'Expression',result:'Result',useExpression:'Use expression in calculator',
+    expressionFailed:'Could not calculate the expression: ',rephrase:'Try rephrasing the problem.',
+    invalidCharacter:'Invalid character',unknownName:'Unknown: ',incompleteExpression:'Incomplete expression',
+    invalidExpression:'Invalid expression',factorialRange:'Factorial: integers from 0 to 170 only',
+    tanUndefined:'tan: undefined',asinDomain:'asin: value must be in [−1, 1]',acosDomain:'acos: value must be in [−1, 1]',
+    acoshDomain:'acosh: x must be ≥ 1',atanhDomain:'atanh: x must be in (−1, 1)',
+    lnPositive:'ln: x must be > 0',logPositive:'log: x must be > 0',
+    sqrtNegative:'Square root of a negative number',divisionByZero:'Division by zero',
+    resultUndefined:'The result is undefined',switchToEnglish:'Switch language to English',
+    switchToSlovak:'Switch language to Slovak'
+  }
+};
+function initialLanguage(){try{return localStorage.getItem('deepcalc-language')==='en'?'en':'sk'}catch(e){return 'sk'}}
+const st={expr:'',deg:true,inv:false,fresh:false,ans:0,prev:'',err:'',errKey:'',errDetail:'',hist:[],lang:initialLanguage()};
+const ui={aiAvailable:null,aiFolders:[],aiConnectionError:'',aiThinking:false,aiResponse:null};
+const t=key=>I18N[st.lang][key]??I18N.sk[key]??key;
+const E=(key,detail='')=>{const e=new Error(t(key)+detail);e.i18nKey=key;e.i18nDetail=detail;return e};
+const displayValue=value=>st.lang==='sk'?String(value).replace(/\./g,','):String(value);
+function applyLanguage(){
+  document.documentElement.lang=st.lang;
+  document.title='DeepCalc';
+  $('langBtn').textContent=st.lang==='sk'?'EN':'SK';
+  $('langBtn').title=t(st.lang==='sk'?'switchToEnglish':'switchToSlovak');
+  $('langBtn').setAttribute('aria-label',$('langBtn').title);
+  document.querySelector('.calc').setAttribute('aria-label',t('calculator'));
+  document.querySelector('.tabs').setAttribute('aria-label',t('mode'));
+  $('tabCalc').textContent=t('calculator');$('tabAvg').textContent=t('average');
+  document.querySelector('.bar .seg').setAttribute('aria-label',t('angleUnit'));
+  $('deg').textContent=t('degrees');$('rad').textContent=t('radians');
+  $('inv').textContent=t('inverse');$('inv').title=t('inverseTitle');
+  $('aiBtn').textContent=t('wordProblem');$('aiBtn').title=t('wordProblemTitle');
+  $('aiText').placeholder=t('wordPlaceholder');$('aiText').setAttribute('aria-label',t('wordProblem'));
+  $('aiGo').textContent=t('chooseFormula');document.querySelector('.ai .note').textContent=t('aiNote');
+  document.querySelector('.hist').setAttribute('aria-label',t('history'));
+  document.querySelector('.hist h2').childNodes[0].textContent=t('history')+' ';
+  $('clr').textContent=t('clear');$('pad').querySelector('[data-decimal="true"]').textContent=st.lang==='sk'?',':'.';
+  $('avgInfo').setAttribute('aria-label',t('average'));
+  $('pad').querySelector('button.k.eq').setAttribute('aria-label',t('calculate'));
+  $('gpad').querySelector('[data-role="grade-back"]')?.setAttribute('aria-label',t('deleteLastGrade'));
+  $('gpad').querySelector('[data-role="grade-eq"]')?.setAttribute('aria-label',t('calculateAverage'));
+  if(ui.aiThinking)$('aiStat').textContent=t('modelThinking');
+  else if(ui.aiAvailable===false)$('aiStat').textContent=t('modelMissing')+ui.aiFolders.join(' ; ');
+  else if(ui.aiConnectionError)$('aiStat').textContent=t('connectionError')+ui.aiConnectionError;
+  else $('aiStat').textContent='';
+  render();
+  if(window.refreshAverageLanguage)window.refreshAverageLanguage();
+  if(window.refreshAIResult)window.refreshAIResult();
+}
+function setLanguage(language){
+  st.lang=language==='en'?'en':'sk';
+  try{localStorage.setItem('deepcalc-language',st.lang)}catch(e){}
+  applyLanguage();
+}
+
+/* ---------- vyhodnotenie výrazu (vlastný parser, bez eval) ---------- */
+const FN=['sin','cos','tan','asin','acos','atan','sinh','cosh','tanh','asinh','acosh','atanh','ln','log','exp','sqrt','cbrt','abs'];
+const cl=v=>parseFloat(v.toFixed(14));
+function fact(n){if(!Number.isInteger(n)||n<0||n>170)throw E('factorialRange');let r=1;for(let k=2;k<=n;k++)r*=k;return r}
+function fns(){
+  const r=x=>st.deg?x*Math.PI/180:x, d=x=>st.deg?x*180/Math.PI:x;
+  return{
+    sin:x=>cl(Math.sin(r(x))),cos:x=>cl(Math.cos(r(x))),
+    tan:x=>{const a=r(x);if(Math.abs(Math.cos(a))<1e-12)throw E('tanUndefined');return cl(Math.tan(a))},
+    asin:x=>{if(Math.abs(x)>1)throw E('asinDomain');return d(Math.asin(x))},
+    acos:x=>{if(Math.abs(x)>1)throw E('acosDomain');return d(Math.acos(x))},
+    atan:x=>d(Math.atan(x)),
+    sinh:Math.sinh,cosh:Math.cosh,tanh:Math.tanh,asinh:Math.asinh,
+    acosh:x=>{if(x<1)throw E('acoshDomain');return Math.acosh(x)},
+    atanh:x=>{if(Math.abs(x)>=1)throw E('atanhDomain');return Math.atanh(x)},
+    ln:x=>{if(x<=0)throw E('lnPositive');return Math.log(x)},
+    log:x=>{if(x<=0)throw E('logPositive');return Math.log10(x)},
+    exp:Math.exp,
+    sqrt:x=>{if(x<0)throw E('sqrtNegative');return Math.sqrt(x)},
+    cbrt:Math.cbrt,abs:Math.abs
+  };
+}
+function evaluate(src){
+  const s=src.replace(/−/g,'-').replace(/×/g,'*').replace(/÷/g,'/').replace(/,/g,'.');
+  const re=/\s*(?:(\d+\.?\d*(?:E[+-]?\d+)?|\.\d+)|([+\-*\/^()!%])|(√|∛|π)|([a-z]+))/y;
+  const T=[];let m;
+  while(re.lastIndex<s.length){
+    m=re.exec(s);
+    if(!m){if(s.slice(re.lastIndex).trim()==='')break;throw E('invalidCharacter')}
+    if(m[1]!==undefined)T.push({n:parseFloat(m[1])});
+    else if(m[2])T.push({o:m[2]});
+    else if(m[3])T.push(m[3]==='π'?{n:Math.PI}:{f:m[3]==='√'?'sqrt':'cbrt'});
+    else{
+      const w=m[4];
+      if(w==='e')T.push({n:Math.E});else if(w==='pi')T.push({n:Math.PI});else if(w==='ans')T.push({n:st.ans});
+      else if(FN.includes(w))T.push({f:w});else throw E('unknownName',w);
+    }
+  }
+  const F=fns();let i=0;
+  const isO=c=>T[i]&&T[i].o===c;
+  const startsOperand=()=>T[i]&&(T[i].n!==undefined||T[i].f||T[i].o==='(');
+  function expr(){let v=term();while(isO('+')||isO('-')){const o=T[i++].o;const b=term();v=o==='+'?v+b:v-b}return v}
+  function term(){
+    let v=unary();
+    for(;;){
+      if(isO('*')||isO('/')){const o=T[i++].o;const b=unary();if(o==='/'){if(b===0)throw E('divisionByZero');v/=b}else v*=b}
+      else if(startsOperand()){v*=unary()}
+      else break;
+    }
+    return v;
+  }
+  function unary(){if(isO('-')){i++;return -unary()}if(isO('+')){i++;return unary()}return power()}
+  function power(){const b=postfix();if(isO('^')){i++;return Math.pow(b,unary())}return b}
+  function postfix(){let v=primary();while(isO('!')||isO('%')){v=T[i++].o==='!'?fact(v):v/100}return v}
+  function primary(){
+    const t=T[i];if(!t)throw E('incompleteExpression');
+    if(t.n!==undefined){i++;return t.n}
+    if(t.o==='('){i++;const v=expr();if(isO(')'))i++;return v}
+    if(t.f){i++;const x=isO('(')?(i++,(()=>{const v=expr();if(isO(')'))i++;return v})()):power();return F[t.f](x)}
+    throw E('incompleteExpression');
+  }
+  const v=expr();
+  if(i<T.length)throw E('invalidExpression');
+  if(!isFinite(v))throw E('resultUndefined');
+  return v;
+}
+function fmt(v){
+  v=parseFloat(v.toPrecision(12));
+  if(v===0)return '0';
+  const a=Math.abs(v);
+  let s=(a>=1e15||a<1e-6)?v.toExponential().replace('e','E'):String(v);
+  return s.replace(/^-/,'−');
+}
+
+/* ---------- vstup ---------- */
+function add(t){
+  st.err='';
+  const isOp=/^[+\-−×÷]$/.test(t);
+  const cont=isOp||/^[\^!%]/.test(t);
+  if(st.fresh){if(!cont)st.expr='';st.fresh=false}
+  if(isOp&&!st.expr){
+    if(t==='−')st.expr='−';else if(st.hist.length)st.expr='ans'+t;
+    return render();
+  }
+  const last=st.expr.slice(-1);
+  if(isOp&&/[+\-−×÷]/.test(last)){
+    if(t==='−'&&/[×÷]/.test(last))st.expr+=t;else st.expr=st.expr.slice(0,-1)+t;
+  }else if(t==='.'){
+    const seg=st.expr.match(/[0-9.]*$/)[0];
+    if(seg.includes('.'))return;
+    st.expr+=seg===''?'0.':'.';
+  }else st.expr+=t;
+  render();
+}
+function back(){st.err='';if(st.fresh){st.fresh=false}st.expr=st.expr.replace(/(?:[a-z]+\(|ans|.)$/,'');render()}
+function clear(){st.expr='';st.err='';st.fresh=false;st.prev='';render()}
+function equals(){
+  if(!st.expr)return;
+  try{
+    const v=evaluate(st.expr),res=fmt(v);
+    st.hist.unshift({e:st.expr,r:res});if(st.hist.length>40)st.hist.pop();
+    st.ans=parseFloat(v.toPrecision(12));st.prev=st.expr;st.expr=res;st.fresh=true;st.err='';
+  }catch(e){st.err=e.message;st.errKey=e.i18nKey||'';st.errDetail=e.i18nDetail||''}
+  render();
+}
+
+/* ---------- vykresľovanie ---------- */
+function render(){
+  const ex=$('expr'),out=$('out');
+  const shown=displayValue(st.expr||'0');
+  ex.textContent=shown;
+  ex.className='expr'+(shown.length>26?' s':shown.length>14?' m':'');
+  out.className='out';
+  if(st.err){out.textContent=st.errKey?t(st.errKey)+st.errDetail:st.err;out.classList.add('err')}
+  else if(st.fresh){out.textContent=displayValue(st.prev)+' ='}
+  else{
+    let txt='';
+    if(st.expr){
+      try{
+        const src=st.expr.replace(/[+\-−×÷^]+$/,'');
+        if(src){const r=fmt(evaluate(src));if(r!==st.expr)txt='= '+displayValue(r)}
+      }catch(e){}
+    }
+    out.textContent=txt;
+  }
+  renderHist();
+}
+function renderHist(){
+  const l=$('list');l.textContent='';
+  if(!st.hist.length){const p=document.createElement('div');p.className='empty';p.textContent=t('historyEmpty');l.appendChild(p);return}
+  st.hist.forEach(h=>{
+    const b=document.createElement('button');b.className='item';
+    const s=document.createElement('small');s.textContent=displayValue(h.e)+' =';
+    const r=document.createElement('b');r.textContent=displayValue(h.r);
+    b.append(s,r);
+    b.onclick=()=>{st.expr=h.r;st.fresh=true;st.prev=h.e;st.err='';render()};
+    l.appendChild(b);
+  });
+}
+
+/* ---------- tlačidlá ---------- */
+const SCI=[
+  ['sin','sin(','asin','asin('],['cos','cos(','acos','acos('],['tan','tan(','atan','atan('],
+  ['sinh','sinh(','asinh','asinh('],['cosh','cosh(','acosh','acosh('],['tanh','tanh(','atanh','atanh('],
+  ['ln','ln(','eˣ','exp('],['log','log(','10ˣ','10^('],['√','√(','∛','∛('],
+  ['x²','^2','x³','^3'],['xʸ','^','xʸ','^'],['n!','!','n!','!'],
+  ['π','π','π','π'],['e','e','e','e'],['|x|','abs(','|x|','abs(']
+];
+const PAD=[
+  ['AC','clear','ac'],['⌫','back','fn'],['(','(','fn'],[')',')','fn'],
+  ['7'],['8'],['9'],['÷','÷','op'],
+  ['4'],['5'],['6'],['×','×','op'],
+  ['1'],['2'],['3'],['−','−','op'],
+  ['0'],[',','.','' ],['%','%','fn'],['+','+','op'],
+  ['ANS','ans','fn'],['=','eq','eq']
+];
+const sciBtns=[];
+SCI.forEach(k=>{
+  const b=document.createElement('button');b.className='k fn';b.textContent=k[0];
+  b.onclick=()=>add(st.inv?k[3]:k[1]);
+  sciBtns.push([b,k]);$('sci').appendChild(b);
+});
+PAD.forEach(k=>{
+  const b=document.createElement('button');b.className='k '+(k[2]||'');b.textContent=k[0];
+  const a=k[1]||k[0];
+  if(a==='.')b.dataset.decimal='true';
+  b.onclick=()=>a==='clear'?clear():a==='back'?back():a==='eq'?equals():add(a);
+  if(a==='eq')b.setAttribute('aria-label','Calculate');
+  $('pad').appendChild(b);
+});
+function syncInv(){sciBtns.forEach(([b,k])=>b.textContent=st.inv?k[2]:k[0]);$('inv').setAttribute('aria-pressed',st.inv)}
+$('inv').onclick=()=>{st.inv=!st.inv;syncInv()};
+function setMode(d){st.deg=d;$('deg').setAttribute('aria-pressed',d);$('rad').setAttribute('aria-pressed',!d);render()}
+$('deg').onclick=()=>setMode(true);$('rad').onclick=()=>setMode(false);
+$('clr').onclick=()=>{st.hist=[];renderHist()};
+
+document.addEventListener('keydown',e=>{
+  if(e.ctrlKey||e.metaKey||e.altKey)return;
+  const k=e.key;
+  if(st.mode==='avg'){if(k==='Enter'||k==='=')e.preventDefault();window.avgKey(k);return}
+  if(/^[0-9]$/.test(k))add(k);
+  else if(k==='.'||k===',')add('.');
+  else if(k==='+')add('+');else if(k==='-')add('−');
+  else if(k==='*')add('×');else if(k==='/'){e.preventDefault();add('÷')}
+  else if(k==='^')add('^');else if(k==='(')add('(');else if(k===')')add(')');
+  else if(k==='%')add('%');else if(k==='!')add('!');
+  else if(k==='Enter'||k==='='){e.preventDefault();equals()}
+  else if(k==='Backspace')back();
+  else if(k==='Escape'||k==='Delete')clear();
+  else return;
+});
+
+/* ---------- AI: slovné úlohy (lokálny model, len v aplikácii .exe) ---------- */
+(function(){
+  const api=()=>window.pywebview&&window.pywebview.api;
+  const mk=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!==undefined)e.textContent=txt;return e};
+  let inited=false;
+  function renderResult(){
+    const res=$('aiRes');res.textContent='';res.className='res';
+    const data=ui.aiResponse;if(!data)return;
+    if(data.type==='error'){
+      res.classList.add('err');res.textContent=t('aiError')+data.message;return;
+    }
+    const r=data.result;
+    const line=(label,value,big)=>{res.appendChild(mk('span','lbl',label));res.appendChild(mk('div',big?'big':'',value))};
+    if(r.reasoning)line(t('reasoning'),r.reasoning);
+    if(r.formula)line(t('formula'),r.formula);
+    if(r.substitution)line(t('substitution'),r.substitution);
+    line(t('expression'),r.expression);
+    if(data.evalError){
+      res.appendChild(mk('div','',''));res.classList.add('err');
+      res.appendChild(mk('span','lbl',t('expressionFailed')+data.evalError+' '+t('rephrase')));return;
+    }
+    line(t('result'),displayValue(data.output),true);
+    const use=mk('button','use',t('useExpression'));
+    use.onclick=()=>{st.expr=String(r.expression).replace(/\*/g,'×').replace(/\//g,'÷').replace(/\s+/g,'');st.fresh=false;st.err='';st.errKey='';render()};
+    res.appendChild(mk('div','',''));res.lastChild.appendChild(use);
+  }
+  window.refreshAIResult=renderResult;
+  async function init(){
+    if(inited)return;
+    const a=api();
+    if(!a||typeof a.ai_status!=='function')return;
+    inited=true;$('aiBtn').hidden=false;
+    try{
+      const s=await a.ai_status();
+      ui.aiAvailable=!!(s&&s.available);ui.aiFolders=(s&&s.folders)||[];
+      if(!ui.aiAvailable)$('aiGo').disabled=true;
+      applyLanguage();
+    }catch(e){ui.aiConnectionError=String(e);applyLanguage()}
+  }
+  window.addEventListener('pywebviewready',init);
+  let tries=0;const poll=setInterval(()=>{init();if(inited||++tries>40)clearInterval(poll)},300);
+  $('aiBtn').onclick=()=>{
+    const open=$('ai').hidden;$('ai').hidden=!open;$('aiBtn').setAttribute('aria-pressed',open);
+    if(open)$('aiText').focus();
+  };
+  async function solve(){
+    const problem=$('aiText').value.trim();if(!problem)return;
+    const go=$('aiGo'),stat=$('aiStat');
+    go.disabled=true;ui.aiThinking=true;ui.aiResponse=null;renderResult();applyLanguage();
+    let r;
+    try{r=await api().solve(problem,st.lang)}catch(e){r={ok:false,error:String(e)}}
+    go.disabled=false;ui.aiThinking=false;stat.textContent='';
+    if(!r||!r.ok){ui.aiResponse={type:'error',message:(r&&r.error)||t('unknown')};renderResult();return}
+    let value;
+    try{value=evaluate(String(r.expression))}
+    catch(e){ui.aiResponse={type:'result',result:r,evalError:e.message};renderResult();return}
+    const output=fmt(value);
+    ui.aiResponse={type:'result',result:r,output};
+    renderResult();
+    st.hist.unshift({e:String(r.expression),r:output});if(st.hist.length>40)st.hist.pop();renderHist();
+  }
+  $('aiGo').onclick=solve;
+  $('aiText').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)){e.preventDefault();solve()}e.stopPropagation()});
+})();
+
+/* ---------- Priemer známok ---------- */
+(function(){
+  const av={list:[],done:false};
+  const mk=(tag,cls,txt)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(txt!==undefined)e.textContent=txt;return e};
+  const plural=n=>st.lang==='en'?(n===1?'grade':'grades'):(n===1?'známka':(n>=2&&n<=4)?'známky':'známok');
+  function avgRender(){
+    const n=av.list.length,sum=av.list.reduce((a,b)=>a+b,0);
+    $('avgInfo').textContent=n?(n+' '+plural(n)+' · '+t('sum')+' '+sum):t('gradesEmpty');
+    const ch=$('avgChips');ch.textContent='';
+    av.list.forEach(g=>{const c=mk('span','chip',String(g));c.style.setProperty('--c','var(--g'+g+')');ch.appendChild(c)});
+    ch.scrollTop=ch.scrollHeight;
+    const r=$('avgRes');r.textContent='';
+    if(av.done&&n){
+      const val=displayValue((Math.round(sum*100/n)/100).toFixed(2));
+      r.appendChild(mk('small','',t('averageLabel')));r.appendChild(document.createTextNode(val));
+    }
+  }
+  function add(g){if(av.done){av.list=[];av.done=false}if(av.list.length>=60)return;av.list.push(g);avgRender()}
+  function back(){av.list.pop();av.done=false;avgRender()}
+  function clr(){av.list=[];av.done=false;avgRender()}
+  function eq(){if(!av.list.length)return;av.done=true;avgRender()}
+  window.avgKey=k=>{
+    if(/^[1-5]$/.test(k))add(+k);
+    else if(k==='Enter'||k==='='||k==='Enter')eq();
+    else if(k==='Backspace')back();
+    else if(k==='Escape'||k==='Delete')clr();
+  };
+  for(let g=1;g<=5;g++){
+    const b=mk('button','k',String(g));b.style.color='var(--g'+g+')';b.onclick=()=>add(g);$('gpad').appendChild(b);
+  }
+  const ac=mk('button','k fn r2 ac','AC');ac.onclick=clr;
+  const bk=mk('button','k fn r2','⌫');bk.dataset.role='grade-back';bk.setAttribute('aria-label',t('deleteLastGrade'));bk.onclick=back;
+  const e=mk('button','k eq r2','=');e.dataset.role='grade-eq';e.setAttribute('aria-label',t('calculateAverage'));e.onclick=eq;
+  $('gpad').append(ac,bk,e);
+  window.refreshAverageLanguage=()=>{$('avgHint').textContent=t('gradeHint');avgRender()};
+  function setView(m){
+    st.mode=m;
+    $('calcView').hidden=m!=='calc';$('avgView').hidden=m!=='avg';
+    $('tabCalc').setAttribute('aria-pressed',m==='calc');$('tabAvg').setAttribute('aria-pressed',m==='avg');
+    if(m==='avg')avgRender();
+  }
+  $('tabCalc').onclick=()=>setView('calc');$('tabAvg').onclick=()=>setView('avg');
+  st.mode='calc';avgRender();
+})();
+$('langBtn').onclick=()=>setLanguage(st.lang==='sk'?'en':'sk');
+applyLanguage();syncInv();
+</script>
+</body>
+</html>
